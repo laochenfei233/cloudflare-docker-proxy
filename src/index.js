@@ -1,26 +1,34 @@
-addEventListener("fetch", (event) => {
-  event.passThroughOnException();
-  event.respondWith(handleRequest(event.request));
-});
+export default {
+  async fetch(request, env, ctx) {
+    try {
+      return await handleRequest(request, env);
+    } catch (e) {
+      return new Response(JSON.stringify({ error: e.message }), { status: 500 });
+    }
+  }
+};
 
 const dockerHub = "https://registry-1.docker.io";
 
-const routes = {
-  // production
-  ["docker." + CUSTOM_DOMAIN]: dockerHub,
-  ["quay." + CUSTOM_DOMAIN]: "https://quay.io",
-  ["gcr." + CUSTOM_DOMAIN]: "https://gcr.io",
-  ["k8s-gcr." + CUSTOM_DOMAIN]: "https://k8s.gcr.io",
-  ["k8s." + CUSTOM_DOMAIN]: "https://registry.k8s.io",
-  ["ghcr." + CUSTOM_DOMAIN]: "https://ghcr.io",
-  ["cloudsmith." + CUSTOM_DOMAIN]: "https://docker.cloudsmith.io",
-  ["ecr." + CUSTOM_DOMAIN]: "https://public.ecr.aws",
+function buildRoutes(CUSTOM_DOMAIN) {
+  return {
+    // production
+    ["docker." + CUSTOM_DOMAIN]: dockerHub,
+    ["quay." + CUSTOM_DOMAIN]: "https://quay.io",
+    ["gcr." + CUSTOM_DOMAIN]: "https://gcr.io",
+    ["k8s-gcr." + CUSTOM_DOMAIN]: "https://k8s.gcr.io",
+    ["k8s." + CUSTOM_DOMAIN]: "https://registry.k8s.io",
+    ["ghcr." + CUSTOM_DOMAIN]: "https://ghcr.io",
+    ["cloudsmith." + CUSTOM_DOMAIN]: "https://docker.cloudsmith.io",
+    ["ecr." + CUSTOM_DOMAIN]: "https://public.ecr.aws",
 
-  // staging
-  ["docker-staging." + CUSTOM_DOMAIN]: dockerHub,
-};
+    // staging
+    ["docker-staging." + CUSTOM_DOMAIN]: dockerHub,
+  };
+}
 
-function routeByHosts(host) {
+function routeByHosts(host, CUSTOM_DOMAIN, MODE, TARGET_UPSTREAM) {
+  const routes = buildRoutes(CUSTOM_DOMAIN);
   if (host in routes) {
     return routes[host];
   }
@@ -30,12 +38,14 @@ function routeByHosts(host) {
   return "";
 }
 
-async function handleRequest(request) {
+async function handleRequest(request, env) {
+  const { CUSTOM_DOMAIN, MODE, TARGET_UPSTREAM } = env;
+  const routes = buildRoutes(CUSTOM_DOMAIN);
   const url = new URL(request.url);
   if (url.pathname == "/") {
     return Response.redirect(url.protocol + "//" + url.host + "/v2/", 301);
   }
-  const upstream = routeByHosts(url.hostname);
+  const upstream = routeByHosts(url.hostname, CUSTOM_DOMAIN, MODE, TARGET_UPSTREAM);
   if (upstream === "") {
     return new Response(
       JSON.stringify({
@@ -61,7 +71,7 @@ async function handleRequest(request) {
       redirect: "follow",
     });
     if (resp.status === 401) {
-      return responseUnauthorized(url);
+      return responseUnauthorized(url, MODE);
     }
     return resp;
   }
@@ -113,7 +123,7 @@ async function handleRequest(request) {
   });
   const resp = await fetch(newReq);
   if (resp.status == 401) {
-    return responseUnauthorized(url);
+    return responseUnauthorized(url, MODE);
   }
   // handle dockerhub blob redirect manually
   if (isDockerHub && resp.status == 307) {
@@ -156,7 +166,7 @@ async function fetchToken(wwwAuthenticate, scope, authorization) {
   return await fetch(url, { method: "GET", headers: headers });
 }
 
-function responseUnauthorized(url) {
+function responseUnauthorized(url, MODE) {
   const headers = new Headers();
   if (MODE == "debug") {
     headers.set(

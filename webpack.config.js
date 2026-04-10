@@ -7,6 +7,12 @@ module.exports = {
   output: {
     path: path.resolve(__dirname, "./dist"),
     filename: "worker.js",
+    library: {
+      type: "module",
+    },
+  },
+  experiments: {
+    outputModule: true,
   },
   optimization: {
     usedExports: true,

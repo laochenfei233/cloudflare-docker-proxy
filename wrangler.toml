@@ -28,6 +28,7 @@ name = "cloudflare-docker-proxy"
 # ]
 
 [env.production.vars]
+CUSTOM_DOMAIN = "libcuda.so"
 MODE = "production"
 TARGET_UPSTREAM = ""
 
@@ -36,5 +37,6 @@ name = "cloudflare-docker-proxy-staging"
 # route = { pattern = "docker-staging.libcuda.so", custom_domain = true }
 
 [env.staging.vars]
+CUSTOM_DOMAIN = "libcuda.so"
 MODE = "staging"
 TARGET_UPSTREAM = ""
