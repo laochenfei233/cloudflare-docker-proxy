@@ -1,12 +1,7 @@
-export default {
-  async fetch(request, env, ctx) {
-    try {
-      return await handleRequest(request, env);
-    } catch (e) {
-      return new Response(JSON.stringify({ error: e.message }), { status: 500 });
-    }
-  }
-};
+addEventListener("fetch", (event) => {
+  event.passThroughOnException();
+  event.respondWith(handleRequest(event.request));
+});
 
 const dockerHub = "https://registry-1.docker.io";
 
@@ -27,7 +22,7 @@ function buildRoutes(CUSTOM_DOMAIN) {
   };
 }
 
-function routeByHosts(host, CUSTOM_DOMAIN, MODE, TARGET_UPSTREAM) {
+function routeByHosts(host) {
   const routes = buildRoutes(CUSTOM_DOMAIN);
   if (host in routes) {
     return routes[host];
@@ -38,14 +33,13 @@ function routeByHosts(host, CUSTOM_DOMAIN, MODE, TARGET_UPSTREAM) {
   return "";
 }
 
-async function handleRequest(request, env) {
-  const { CUSTOM_DOMAIN, MODE, TARGET_UPSTREAM } = env;
+async function handleRequest(request) {
   const routes = buildRoutes(CUSTOM_DOMAIN);
   const url = new URL(request.url);
   if (url.pathname == "/") {
     return Response.redirect(url.protocol + "//" + url.host + "/v2/", 301);
   }
-  const upstream = routeByHosts(url.hostname, CUSTOM_DOMAIN, MODE, TARGET_UPSTREAM);
+  const upstream = routeByHosts(url.hostname);
   if (upstream === "") {
     return new Response(
       JSON.stringify({
@@ -71,7 +65,7 @@ async function handleRequest(request, env) {
       redirect: "follow",
     });
     if (resp.status === 401) {
-      return responseUnauthorized(url, MODE);
+      return responseUnauthorized(url);
     }
     return resp;
   }
@@ -123,7 +117,7 @@ async function handleRequest(request, env) {
   });
   const resp = await fetch(newReq);
   if (resp.status == 401) {
-    return responseUnauthorized(url, MODE);
+    return responseUnauthorized(url);
   }
   // handle dockerhub blob redirect manually
   if (isDockerHub && resp.status == 307) {
